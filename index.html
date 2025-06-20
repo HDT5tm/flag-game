@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Country Flag Matching Game</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f0f0f0;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      font-weight: bold;
+      text-align: center;
+      padding: 20px;
+    }
+    p.instructions {
+      font-size: 16px;
+      margin: 10px 0 20px;
+    }
+    .container {
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .radio-container {
+      margin-bottom: 20px;
+    }
+    .game-board {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .row {
+      display: flex;
+      justify-content: center;
+      margin-top: 10px;
+      flex-wrap: wrap;
+      max-width: 100%;
+    }
+    .card {
+      width: 120px;
+      height: 120px;
+      margin: 5px;
+      border: 2px solid grey;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: white;
+      cursor: pointer;
+      position: relative;
+      box-sizing: border-box;
+      flex-direction: column;
+    }
+    .card p {
+      margin: 0;
+      padding: 5px;
+      font-size: 12px;
+      word-wrap: break-word;
+      text-align: center;
+    }
+    img {
+      max-width: 80px;
+      height: auto;
+    }
+    .highlight {
+      border-color: orange;
+    }
+    .match {
+      border-color: green;
+      pointer-events: none;
+    }
+    .incorrect {
+      border-color: red;
+    }
+    .capital-info {
+      font-size: 12px;
+      color: blue;
+      margin-top: 5px;
+      display: none;
+    }
+    .message {
+      font-size: 18px;
+      font-weight: bold;
+      margin-top: 20px;
+    }
+  </style>
+  <script>
+    let selectedName = null;
+    let selectedFlag = null;
+    let boardSize = '4x2';
+    let totalCountries = 0;
+    let matchesFound = 0;
+
+    $(document).ready(function() {
+      // When region radio buttons change
+      $("input[name='region']").on('change', function() {
+        resetGame();
+        const regionName = $(this).val();
+        fetchCountryData(regionName);
+      });
+
+      // When board size radio buttons change
+      $("input[name='boardSize']").on('change', function() {
+        boardSize = $(this).val();
+        resetGame();
+        fetchCountryData($("input[name='region']:checked").val());
+      });
+
+      // New game button handler
+      $("#start-new-game").on("click", function() {
+        resetGame();
+        $("input[name='region']:checked").trigger("change");
+      });
+
+      // Show answers button handler
+      $("#show-answers").on("click", function() {
+        showAnswers();
+      });
+
+      function resetGame() {
+        selectedName = null;
+        selectedFlag = null;
+        matchesFound = 0;
+        $('#flag-row').empty();
+        $('#name-row').empty();
+        $('#completion-message').hide();
+      }
+
+      function fetchCountryData(regionName) {
+        if (!regionName) return;
+        const apiUrl = `https://www.cs.kent.ac.uk/people/staff/yh/api/country-data/countries/region/${regionName}`;
+        $.getJSON(apiUrl, function(data) {
+          $('#flag-row').empty();
+          $('#name-row').empty();
+          const numPairs = boardSize === '4x4' ? 8 : 4;
+          totalCountries = numPairs;
+          const selectedCountries = shuffleArray(data).slice(0, numPairs);
+
+          selectedCountries.forEach(country => {
+            const flagCard = `<div class="card flag-card" data-country="${country.name}">
+                              <img src="${country.flag}" alt="Flag of ${country.name}">
+                              <p class="capital-info" style="display: none;">${country.name}, ${country.capital}</p>
+                            </div>`;
+            $('#flag-row').append(flagCard);
+          });
+
+          const shuffledCountries = shuffleArray(selectedCountries);
+          shuffledCountries.forEach(country => {
+            const countryCard = `<div class="card country-card" data-country="${country.name}">
+                                <p>${country.name}, <span class="capital">${country.capital}</span></p>
+                               </div>`;
+            $('#name-row').append(countryCard);
+          });
+
+          $('.card').on('click', function() {
+            handleCardClick($(this));
+          });
+        });
+      }
+
+      function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+      }
+
+      function handleCardClick(card) {
+        const country = card.data('country');
+
+        if (card.hasClass('country-card')) {
+          if (selectedName && selectedName.is(card)) {
+            selectedName.removeClass('highlight');
+            selectedName = null;
+            return;
+          }
+          if (selectedName) selectedName.removeClass('highlight');
+          selectedName = card;
+          selectedName.addClass('highlight');
+        } else if (card.hasClass('flag-card')) {
+          if (selectedFlag && selectedFlag.is(card)) {
+            selectedFlag.removeClass('highlight');
+            selectedFlag = null;
+            return;
+          }
+          if (selectedFlag) selectedFlag.removeClass('highlight');
+          selectedFlag = card;
+          selectedFlag.addClass('highlight');
+        }
+
+        if (selectedName && selectedFlag) {
+          if (selectedName.data('country') === selectedFlag.data('country')) {
+            selectedName.addClass('match');
+            selectedFlag.addClass('match');
+            matchesFound++;
+            selectedName = null;
+            selectedFlag = null;
+            checkGameCompletion();
+          } else {
+            selectedName.addClass('incorrect');
+            selectedFlag.addClass('incorrect');
+            setTimeout(() => {
+              selectedName.removeClass('highlight incorrect');
+              selectedFlag.removeClass('highlight incorrect');
+              selectedName = null;
+              selectedFlag = null;
+            }, 500);
+          }
+        }
+      }
+
+      function showAnswers() {
+        $('.capital-info').show(); // Show all capital information elements
+      }
+
+      function checkGameCompletion() {
+        if (matchesFound === totalCountries) {
+          $('#completion-message').text("Congratulations! You've matched all countries with their flags!");
+          $('#completion-message').show();
+        }
+      }
+    });
+  </script>
+</head>
+<body>
+
+<h1>Match countries with their flags!</h1>
+<p class="instructions">Select a region, choose the board size, and match each country with its corresponding flag and capital city!</p>
+
+<div class="container">
+  <div class="radio-container">
+    <p><strong>Select a region to start playing!</strong></p>
+    <form>
+      <input type="radio" name="region" value="Africa"> Africa
+      <input type="radio" name="region" value="Asia"> Asia
+      <input type="radio" name="region" value="Europe"> Europe
+      <input type="radio" name="region" value="Americas"> Americas
+      <input type="radio" name="region" value="Oceania"> Oceania
+    </form>
+  </div>
+
+  <div class="radio-container">
+    <p><strong>Choose the board size:</strong></p>
+    <form>
+      <input type="radio" name="boardSize" value="4x2" checked> 4 x 2
+      <input type="radio" name="boardSize" value="4x4"> 4 x 4
+    </form>
+  </div>
+
+  <button id="show-answers">Show Answers</button>
+  <button id="start-new-game">Start New Game</button>
+
+  <div id="game-board" class="game-board">
+    <div id="flag-row" class="row"></div>
+    <div id="name-row" class="row"></div>
+  </div>
+
+  <div class="message" id="completion-message" style="display: none;"></div>
+</div>
+</body>
+</html>
